@@ -1,12 +1,10 @@
 # Variables with smart defaults
 VERSION ?= 10.2.4
 
-.PHONY: all build clean help
+all: help
 
-# Default target when you just type 'make'
-all: build
-
-build:
+.PHONY: clean build
+build: ## pulls specified gemfire dependency jars and builds a zip build/dist/gemfire-dependencies-<version>.zip
 ifdef REPO_USER
 	@if [ -z "$(REPO_PASS)" ]; then \
 		echo "❌ Error: REPO_PASS is required if REPO_USER is provided."; \
@@ -24,13 +22,11 @@ else
 	@./bundle-interactive.sh
 endif
 
-clean:
+.PHONY: clean
+clean: ## Cleans up the build and dist directories
 	@echo "🧼 Cleaning Gradle build directories..."
 	@./gradlew clean
 
-help:
-	@echo "GemFire Dependency Bundler Makefile"
-	@echo "------------------------------------"
-	@echo "make                     - Launches the interactive setup script"
-	@echo "make clean               - Cleans up the build and dist directories"
-	@echo "make build REPO_USER=x REPO_PASS=y [VERSION=z] - Bypasses prompts entirely"
+# Based on http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
+help: ## Print help for each make target
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {gsub(/\\n/, "\n" sprintf("%26s", " "));printf "\033[36m%-25s\033[0m %s\n\n", $$1, $$2}'
