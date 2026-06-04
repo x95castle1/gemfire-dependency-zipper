@@ -1,0 +1,121 @@
+import org.gradle.maven.MavenModule
+import org.gradle.maven.MavenPomArtifact
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.result.ResolvedArtifactResult
+import java.security.MessageDigest
+
+plugins {
+    id 'java'
+}
+
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+// Dynamically read the version passed from the bash script prompt
+def gemfireVersion = findProperty('gemfireVersion') ?: '10.2.4'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven {
+        credentials {
+            username = System.getenv("GEMFIRE_ARTIFACTORY_USERNAME")
+            password = System.getenv("GEMFIRE_ARTIFACTORY_PASSWORD")
+        }
+        url = uri("https://packages.broadcom.com/artifactory/gemfire/")
+    }
+}
+
+dependencies {
+    implementation "com.vmware.gemfire:gemfire-core:${gemfireVersion}"
+    implementation "com.vmware.gemfire:gemfire-logging:${gemfireVersion}"
+    implementation "com.vmware.gemfire:gemfire-cq:${gemfireVersion}"
+    implementation "com.vmware.gemfire:gemfire-old-client-support:${gemfireVersion}"
+    implementation "com.vmware.gemfire:gemfire-server-all:${gemfireVersion}"
+    implementation "com.vmware.gemfire:gemfire-gfsh:${gemfireVersion}"
+    implementation "com.vmware.gemfire:gemfire-wan:${gemfireVersion}"
+}
+
+tasks.register('prepareM2Repository') {
+    inputs.files(configurations.runtimeClasspath)
+    def outputDir = layout.buildDirectory.dir('m2-repository')
+    outputs.dir(outputDir)
+
+    doLast {
+        def repoRoot = outputDir.get().asFile
+        repoRoot.deleteDir()
+
+        def calcSha1 = { File file ->
+            def digest = MessageDigest.getInstance("SHA-1")
+            file.withInputStream { is ->
+                byte[] buffer = new byte[8192]
+                def read
+                while ((read = is.read(buffer)) > 0) {
+                    digest.update(buffer, 0, read)
+                }
+            }
+            return String.format("%040x", new BigInteger(1, digest.digest()))
+        }
+
+        // --- STEP 1: Copy JARs and generate .jar.sha1 files ---
+        configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+            def id = artifact.moduleVersion.id
+            def groupPath = id.group.replace('.', '/')
+            def artifactId = id.name
+            def version = id.version
+
+            def targetDir = file("${repoRoot}/${groupPath}/${artifactId}/${version}")
+            targetDir.mkdirs()
+
+            def targetJarFile = file("${targetDir}/${artifact.file.name}")
+
+            project.copy {
+                from artifact.file
+                into targetDir
+            }
+
+            file("${targetJarFile.absolutePath}.sha1").text = calcSha1(targetJarFile)
+        }
+
+        // --- STEP 2: Query for POM files, copy them, and generate .pom.sha1 files ---
+        def componentIds = configurations.runtimeClasspath.incoming.resolutionResult.allComponents
+                .findAll { it.id instanceof ModuleComponentIdentifier }
+                .collect { it.id }
+
+        def queryResult = dependencies.createArtifactResolutionQuery()
+                .forComponents(componentIds)
+                .withArtifacts(MavenModule, MavenPomArtifact)
+                .execute()
+
+        queryResult.resolvedComponents.each { component ->
+            def id = component.id
+            def groupPath = id.group.replace('.', '/')
+            def artifactId = id.module
+            def version = id.version
+            def targetDir = file("${repoRoot}/${groupPath}/${artifactId}/${version}")
+
+            component.getArtifacts(MavenPomArtifact).each { artifactResult ->
+                if (artifactResult instanceof ResolvedArtifactResult) {
+                    def pomFile = artifactResult.file
+                    def targetPomFile = file("${targetDir}/${artifactId}-${version}.pom")
+
+                    project.copy {
+                        from pomFile
+                        into targetDir
+                        rename { "${artifactId}-${version}.pom" }
+                    }
+
+                    file("${targetPomFile.absolutePath}.sha1").text = calcSha1(targetPomFile)
+                }
+            }
+        }
+    }
+}
+
+// 🔥 UPDATED: Uses your specific naming convention dynamically
+tasks.register('zipM2Dependencies', Zip) {
+    dependsOn 'prepareM2Repository'
+    archiveFileName = "gemfire-dependencies-${gemfireVersion}.zip"
+    destinationDirectory = layout.buildDirectory.dir('dist')
+    from layout.buildDirectory.dir('m2-repository')
+}
