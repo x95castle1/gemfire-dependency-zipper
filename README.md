@@ -60,3 +60,29 @@ When unzipped, it perfectly mimics a standard, deployment-ready `.m2` repository
                     ├── gemfire-core-10.2.4.pom
                     └── gemfire-core-10.2.4.pom.sha1
 ```
+
+---
+
+## 🔧 Troubleshooting
+
+### PKIX Path Building Failed (SSL Handshake Error)
+
+If you see an error like:
+
+```
+javax.net.ssl.SSLHandshakeException: PKIX path building failed:
+sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+```
+
+This is typically caused by a corporate web proxy or security agent (such as **Symantec WSS**) intercepting SSL/TLS connections. The proxy presents its own certificate which Java's trust store doesn't recognize.
+
+**Fix:** Disable the Symantec WSS agent (or equivalent corporate proxy/security agent) before running the build, then re-enable it afterward.
+
+### HTTP 401 Unauthorized from Artifactory
+
+If the build fails with `Received status code 401 from server` when resolving GemFire dependencies, this is an authentication failure against the Broadcom Artifactory repository.
+
+**Possible causes:**
+* **Transient server-side issue** — Artifactory may occasionally return a spurious 401. Simply retry the build with `make build`.
+* **Incorrect credentials** — Double-check that your `GEMFIRE_ARTIFACTORY_USERNAME` and `GEMFIRE_ARTIFACTORY_PASSWORD` environment variables (or the values you entered at the prompts) are correct and that your Broadcom account has access to the GemFire repository.
+* **Expired token** — If you are using an API token rather than a password, verify it has not expired.
