@@ -27,6 +27,8 @@ make build
 ```
 > **Tip:** If you have `GEMFIRE_ARTIFACTORY_USERNAME` and `GEMFIRE_ARTIFACTORY_PASSWORD` already exported in your environment variables, hitting **[ENTER]** at the prompts will automatically use them as defaults.
 
+You can generate a registry token here: https://support.broadcom.com/group/ecx/registry-token
+
 ### 3. Automated Command Line Mode (CI/CD / Fast Execution)
 To bypass the script prompts entirely and build instantly on a single line, provide your arguments to the execution path:
 ```bash

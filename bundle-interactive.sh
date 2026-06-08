@@ -2,6 +2,7 @@
 set -e
 
 echo "#️⃣ === Broadcom Artifactory Credentials ==="
+echo "   === Generate a Registry Token here: https://support.broadcom.com/group/ecx/registry-token ==="
 
 # 1. Handle Username Prompt / Env Fallback
 if [ -n "$GEMFIRE_ARTIFACTORY_USERNAME" ]; then
